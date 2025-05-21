@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import time
+import logging
+import argparse
+import openstack
+
+from remove_infra import (
+    delete_keypair,
+    delete_network,
+    delete_router,
+    delete_subnet,
+    delete_security_groups,
+    delete_floating_ips,
+    delete_servers_by_tag,
+    )
+from infrastructure import load_openrc
+from datetime import datetime, timedelta
+
+
+def main(openrc_path, tag, public_key_path):
+    # Load OpenStack credentials from the provided RC file.
+    load_openrc(openrc_path)
+
+    conn = openstack.connect()
+
+    # Delete the servers
+    delete_servers_by_tag(conn, tag)
+    
+    # Delete security groups for the user.
+    delete_security_groups(tag, conn)
+    # Delete the network, subnet, and router for the user. 
+    delete_router(tag, conn)
+    delete_subnet(tag, conn)
+    delete_network(tag, conn)
+    
+    # Delete the keypair for the user.
+    delete_keypair(tag, conn)
+    
+    # Delete the floating IPs.
+    delete_floating_ips(conn)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Script to install using OpenStack RC file, tag, and public key."
+    )
+    parser.add_argument(
+        "openrc_path",
+        type=str,
+        help="Path to the OpenStack RC file (e.g., openrc.sh)"
+    )
+    parser.add_argument(
+        "tag",
+        type=str,
+        help="Tag or version identifier (e.g., v1.0.0)"
+    )
+    parser.add_argument(
+        "public_key_path",
+        type=str,
+        help="Path to the public SSH key file (e.g., ~/.ssh/id_rsa.pub)"
+    )
+
+    args = parser.parse_args()
+    main(args.openrc_path, args.tag, args.public_key_path)
+

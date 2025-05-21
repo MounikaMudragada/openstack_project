@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+import json
+import time
+import logging
+import argparse
+import openstack
+import logging
+
+from infrastructure import (
+    load_openrc,
+    create_keypair,
+    create_network,
+    create_server_return, 
+    cleanup_floating_ips,
+    assign_floating_ip_to_port,
+)
+from datetime import datetime, timedelta
+from security_groups import (
+    create_bastion_security_group,
+    create_haproxy_security_group,
+    create_webservers_security_group,
+)
+from config_hosts_generator import write_ansible_and_ssh_config
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+def main(openrc_path, tag, public_key_path):
+    
+    logging.info("Loading OpenStack credentials from the provided RC file.")
+    load_openrc(openrc_path)
+
+    logging.info("Connecting to OpenStack.")
+    conn = openstack.connect()
+    
+    logging.info("Creating keypair.")
+    keypair = create_keypair(tag, public_key_path, conn)
+    
+    logging.info("Creating network, subnet, and router.")
+    network, subnet, router = create_network(tag, conn)
+    
+    logging.info("Creating security groups.")
+    bastion_sg = create_bastion_security_group(tag, conn)
+    haproxy_sg = create_haproxy_security_group(tag, conn)
+    web_sg = create_webservers_security_group(tag, conn)
+    
+    logging.info("Deleting excess unattached floating IPs if it exceeds 2.")
+    cleanup_floating_ips(conn, keep=2) 
+    
+    server_names_ips = {}
+    names = [f"{tag}_bastion", f"{tag}_haproxy"]
+    for name in names:
+        logging.info(f"Creating server: {name}.")
+        security_group = bastion_sg if f"{tag}_bastion" in name else haproxy_sg
+        server = create_server_return(conn, name, 
+                                    tag, 
+                                    network, 
+                                    keypair, 
+                                    security_group, 
+                                    user_data_path=None)
+
+        logging.info(f"Assigning floating IP to {name}.")
+        floating_ip = assign_floating_ip_to_port(conn,
+        server
+        )
+        if name == f"{tag}_bastion":
+            server_names_ips[server.name] = floating_ip
+        else:
+            server_names_ips[server.name] = server.addresses['shivanetwork'][0]['addr']
+    
+    num_servers = int(open("./servers.conf").read().strip())
+    logging.info(f"Creating {num_servers} web servers.")
+    for i in range(num_servers):
+        server_name = f"{tag}_dev{i+1}"
+        logging.info(f"Creating server: {server_name}.")
+        server = create_server_return(conn, server_name, 
+                                    tag, 
+                                    network, 
+                                    keypair, 
+                                    web_sg, 
+                                    user_data_path=None)
+        server_names_ips[server.name] = server.addresses['shivanetwork'][0]['addr']
+    
+    write_ansible_and_ssh_config(server_names_ips, tag, public_key_path[:-4] )
+    
+    
+if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(
+        description="Script to install using OpenStack RC file, tag, and public key."
+    )
+    parser.add_argument(
+        "openrc_path",
+        type=str,
+        help="Path to the OpenStack RC file (e.g., openrc.sh)"
+    )
+    parser.add_argument(
+        "tag",
+        type=str,
+        help="Tag or version identifier (e.g., v1.0.0)"
+    )
+    parser.add_argument(
+        "public_key_path",
+        type=str,
+        help="Path to the public SSH key file (e.g., ~/.ssh/id_rsa.pub)"
+    )
+
+    args = parser.parse_args()
+    main(args.openrc_path, args.tag, args.public_key_path)
