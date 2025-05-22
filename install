@@ -8,6 +8,7 @@ import logging
 import argparse
 import openstack
 import logging
+import base64
 
 from infrastructure import (
     load_openrc,
@@ -16,6 +17,7 @@ from infrastructure import (
     create_server_return, 
     cleanup_floating_ips,
     assign_floating_ip_to_port,
+    abs_path
 )
 from datetime import datetime, timedelta
 from security_groups import (
@@ -24,6 +26,14 @@ from security_groups import (
     create_webservers_security_group,
 )
 from config_hosts_generator import write_ansible_and_ssh_config
+from variables import ( 
+    WEBSERVER_USER_DATA, 
+    HAPROXY_USER_DATA,
+)
+from ansible_runner import (
+    check_reachability,
+    run_ansible_playbook,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,12 +68,15 @@ def main(openrc_path, tag, public_key_path):
     for name in names:
         logging.info(f"Creating server: {name}.")
         security_group = bastion_sg if f"{tag}_bastion" in name else haproxy_sg
+        user_data = HAPROXY_USER_DATA if f"{tag}_haproxy" in name else None
+        if user_data:
+            user_data = base64.b64encode(user_data.encode()).decode()
         server = create_server_return(conn, name, 
                                     tag, 
                                     network, 
                                     keypair, 
                                     security_group, 
-                                    user_data_path=None)
+                                    user_data=user_data)
 
         logging.info(f"Assigning floating IP to {name}.")
         floating_ip = assign_floating_ip_to_port(conn,
@@ -79,16 +92,25 @@ def main(openrc_path, tag, public_key_path):
     for i in range(num_servers):
         server_name = f"{tag}_dev{i+1}"
         logging.info(f"Creating server: {server_name}.")
+        user_data = base64.b64encode(WEBSERVER_USER_DATA.encode()).decode()
         server = create_server_return(conn, server_name, 
                                     tag, 
                                     network, 
                                     keypair, 
                                     web_sg, 
-                                    user_data_path=None)
+                                    user_data=user_data)
         server_names_ips[server.name] = server.addresses['shivanetwork'][0]['addr']
     
-    write_ansible_and_ssh_config(server_names_ips, tag, public_key_path[:-4] )
+    write_ansible_and_ssh_config(server_names_ips, tag, abs_path(public_key_path)[:-4] )
     
+    logging.info("Check if all servers are reachable.")
+    if check_reachability(abs_path("./hosts"), abs_path(f"./{tag}_config")):
+        logging.info("All servers are reachable.")
+    else:
+        logging.error("Some servers are unreachable. Please check the network configuration.")
+        sys.exit(1)
+    logging.info("Run ansible playbook.")
+    run_ansible_playbook(abs_path("./hosts"), abs_path(f"./{tag}_config"), abs_path("./site.yaml"))
     
 if __name__ == "__main__":
     

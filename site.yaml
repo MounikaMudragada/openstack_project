@@ -1,0 +1,74 @@
+---
+- name: Install and configure web servers
+  hosts: webservers
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Copy snmpd.conf
+      copy:
+        src: templete_files/snmpd.conf.j2
+        dest: /etc/snmp/snmpd.conf
+
+    - name: Restart snmpd
+      service:
+        name: snmpd
+        state: restarted
+
+    - name: Create a directory for the web server
+      file: 
+        path: /home/ubuntu/flask
+        state: directory
+        mode: '0755'
+
+    - name: Copy the Flask app
+      copy:
+        src: templete_files/application2.py
+        dest: /home/ubuntu/flask/app.py
+
+    - name: Copy the Flask service file
+      template:
+        src: templete_files/flask.service.j2
+        dest: /etc/systemd/system/flask.service
+
+    - name: Start the Flask service
+      systemd:
+        name: flask
+        state: started
+        enabled: true
+
+- name: Gather facts on all hosts
+  hosts: all
+  gather_facts: true
+  tasks: []
+
+- name: Configure HAProxy and Nginx
+  hosts: haproxy
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Configure HAProxy
+      template:
+        src: templete_files/haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+      notify:
+        - Restart HAProxy
+
+    - name: Configure Nginx
+      template:
+        src: templete_files/nginx.conf
+        dest: /etc/nginx/nginx.conf
+      notify:
+        - Restart Nginx
+
+  handlers:
+    - name: Restart HAProxy
+      service:
+        name: haproxy
+        state: restarted
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+
