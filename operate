@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+
+import time
+import argparse
+import openstack
+import logging
+from infrastructure import (
+    load_openrc,
+    create_or_get_keypair,
+    create_or_get_network,
+    create_or_get_server, 
+    assign_or_get_floating_ip,
+    abs_path
+)
+from security_groups import (
+    create_or_get_webservers_security_group,
+)
+from ansible_runner import (
+    check_reachability,
+    run_ansible_playbook,
+    check_hosts_status
+)
+from config_hosts_generator import (
+    write_ansible_and_ssh_config,
+    extract_names_ips_from_server
+    )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+def main(openrc_path, tag, public_key_path):
+    """
+    Main function to set up OpenStack infrastructure.
+    """
+    logging.info("Loading OpenStack credentials from the provided RC file.")
+    load_openrc(openrc_path)
+    logging.info("Connecting to OpenStack.")
+    conn = openstack.connect()
+    logging.info("Get the information of the keypair, network and webserver security group.")
+    keypair = create_or_get_keypair(tag, public_key_path, conn, log=False)
+    network, subnet, router = create_or_get_network(tag, conn, log=False)
+    web_sg = create_or_get_webservers_security_group(tag, conn, log=False)
+    
+    while True:
+        present_time = time.time()
+        logging.info("Read the servers.conf file to get the number of servers required.")
+        no_of_servers_required = int(open("./servers.conf").read().strip())
+        logging.info("checking the reachability of the servers using ansible ping.")
+        unreachable_hosts, reachable_hosts = check_hosts_status(
+            inventory_path=abs_path("./hosts"),
+            config_path=abs_path(f"./{tag}_config"),
+        )
+        if len(reachable_hosts) == no_of_servers_required:
+            logging.info("We have required number of servers i.e %d", no_of_servers_required)
+            if len(unreachable_hosts) > 0:
+                logging.info("We have some unreachable hosts, so update the hosts file, config file and update the haproxy configuration.")
+                total_servers = list(conn.compute.servers())
+                server_names_ip_dict = extract_names_ips_from_server(total_servers, tag)
+                write_ansible_and_ssh_config(
+                    server_names_ip_dict,
+                    tag,
+                    abs_path(public_key_path)[:-4]
+                )
+                logging.info("Updating the haproxy configuration.")
+                run_ansible_playbook(
+                    inventory_path=abs_path("./hosts"),
+                    config_path=abs_path(f"./{tag}_config"),
+                    playbook_path=abs_path("./site.yaml"), 
+                    tags=["haproxy", "gather_facts"]
+                )
+        time.sleep(30 - (time.time()- present_time))
+        
+        
+if __name__ == "__main__":
+    
+    parser = argparse.ArgumentParser(
+        description="Script to install using OpenStack RC file, tag, and public key."
+    )
+    parser.add_argument(
+        "openrc_path",
+        type=str,
+        help="Path to the OpenStack RC file (e.g., openrc.sh)"
+    )
+    parser.add_argument(
+        "tag",
+        type=str,
+        help="Tag or version identifier (e.g., v1.0.0)"
+    )
+    parser.add_argument(
+        "public_key_path",
+        type=str,
+        help="Path to the public SSH key file (e.g., ~/.ssh/id_rsa.pub)"
+    )
+
+    args = parser.parse_args()
+    main(args.openrc_path, args.tag, args.public_key_path)
