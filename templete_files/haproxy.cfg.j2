@@ -1,0 +1,19 @@
+global
+    daemon
+    maxconn 256
+
+defaults
+    mode http
+    timeout connect 10s
+    timeout client 60s
+    timeout server 100s
+
+frontend http_front
+    bind *:5000
+    default_backend http_back
+
+backend http_back
+    balance roundrobin
+{% for host in groups["webservers"] %}
+    server {{ host }} {{ hostvars[host]["ansible_default_ipv4"]["address"] }}:5000 check 
+{% endfor %}
