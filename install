@@ -9,17 +9,17 @@ import base64
 
 from infrastructure import (
     load_openrc,
-    create_keypair,
-    create_network,
-    create_server_return, 
-    assign_floating_ip_to_port,
+    create_or_get_keypair,
+    create_or_get_network,
+    create_or_get_server, 
+    assign_or_get_floating_ip,
     abs_path
 )
 from remove_infra import cleanup_excess_floating_ips
 from security_groups import (
-    create_bastion_security_group,
-    create_haproxy_security_group,
-    create_webservers_security_group,
+    create_or_get_bastion_security_group,
+    create_or_get_haproxy_security_group,
+    create_or_get_webservers_security_group,
 )
 from config_hosts_generator import write_ansible_and_ssh_config
 from variables import ( 
@@ -46,15 +46,15 @@ def main(openrc_path, tag, public_key_path):
     conn = openstack.connect()
     
     logging.info("Creating keypair.")
-    keypair = create_keypair(tag, public_key_path, conn)
+    keypair = create_or_get_keypair(tag, public_key_path, conn)
     
     logging.info("Creating network, subnet, and router.")
-    network, subnet, router = create_network(tag, conn)
+    network, subnet, router = create_or_get_network(tag, conn)
     
     logging.info("Creating security groups.")
-    bastion_sg = create_bastion_security_group(tag, conn)
-    haproxy_sg = create_haproxy_security_group(tag, conn)
-    web_sg = create_webservers_security_group(tag, conn)
+    bastion_sg = create_or_get_bastion_security_group(tag, conn)
+    haproxy_sg = create_or_get_haproxy_security_group(tag, conn)
+    web_sg = create_or_get_webservers_security_group(tag, conn)
     
     logging.info("Deleting excess unattached floating IPs if it exceeds 2.")
     cleanup_excess_floating_ips(conn, keep=2) 
@@ -67,7 +67,7 @@ def main(openrc_path, tag, public_key_path):
         user_data = HAPROXY_USER_DATA if f"{tag}_haproxy" in name else None
         if user_data:
             user_data = base64.b64encode(user_data.encode()).decode()
-        server = create_server_return(conn, name, 
+        server = create_or_get_server(conn, name, 
                                     tag, 
                                     network, 
                                     keypair, 
@@ -75,7 +75,7 @@ def main(openrc_path, tag, public_key_path):
                                     user_data=user_data)
 
         logging.info(f"Assigning floating IP to {name}.")
-        floating_ip = assign_floating_ip_to_port(conn,
+        floating_ip = assign_or_get_floating_ip(conn,
         server
         )
         if name == f"{tag}_bastion":
@@ -89,7 +89,7 @@ def main(openrc_path, tag, public_key_path):
         server_name = f"{tag}_dev{i+1}"
         logging.info(f"Creating server: {server_name}.")
         user_data = base64.b64encode(WEBSERVER_USER_DATA.encode()).decode()
-        server = create_server_return(conn, server_name, 
+        server = create_or_get_server(conn, server_name, 
                                     tag, 
                                     network, 
                                     keypair, 

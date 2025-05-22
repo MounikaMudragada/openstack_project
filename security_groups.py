@@ -5,7 +5,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s: %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-def create_bastion_security_group(tag, conn):
+def create_or_get_bastion_security_group(tag, conn, log=True):
     """
     Create a simple security group for a bastion host that allows only SSH (port 22) from any IP.
     """
@@ -14,7 +14,8 @@ def create_bastion_security_group(tag, conn):
     # Check if the security group already exists
     sg = conn.network.find_security_group(sg_name)
     if sg:
-        logging.info(f"Security group '{sg_name}' already exists.")
+        if log:
+            logging.info(f"Security group '{sg_name}' already exists.")
         return sg
 
     # Create the security group
@@ -37,7 +38,7 @@ def create_bastion_security_group(tag, conn):
 
     return sg
 
-def create_haproxy_security_group(tag, conn):
+def create_or_get_haproxy_security_group(tag, conn, log=True):
     """
     Create a security group for HAProxy:
     - Allow TCP port 5000 from anywhere
@@ -49,7 +50,8 @@ def create_haproxy_security_group(tag, conn):
     # Check if already exists
     sg = conn.network.find_security_group(sg_name)
     if sg:
-        logging.info(f"Security group '{sg_name}' already exists.")
+        if log:
+            logging.info(f"Security group '{sg_name}' already exists.")
         return sg
 
     # Create the security group
@@ -99,7 +101,7 @@ def create_haproxy_security_group(tag, conn):
     return sg
 
 
-def create_webservers_security_group(tag, conn):
+def create_or_get_webservers_security_group(tag, conn, log=True):
     """
     Create a security group for web servers:
     - Allow UDP 161 from HAProxy security group
@@ -111,7 +113,8 @@ def create_webservers_security_group(tag, conn):
     # Check if security group already exists
     sg = conn.network.find_security_group(sg_name)
     if sg:
-        logging.info(f"Security group '{sg_name}' already exists.")
+        if log:
+            logging.info(f"Security group '{sg_name}' already exists.")
         return sg
 
     # Create the security group

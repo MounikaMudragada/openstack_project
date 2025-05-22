@@ -28,24 +28,26 @@ def load_openrc(openrc_path):
     proc.communicate()
     
 
-def create_keypair(tag, public_key_path, conn):
+def create_or_get_keypair(tag, public_key_path, conn, log=True):
     key_name = f"{tag}keypair"
     with open(public_key_path, 'r') as pubkey_file:
         public_key = pubkey_file.read().strip()
         
     existing = conn.compute.find_keypair(key_name)
     if existing:
-        logging.info(f"Keypair '{key_name}' already exists.")
+        if log:
+            logging.info(f"Keypair '{key_name}' already exists.")
         return existing
 
     keypair = conn.compute.create_keypair(
         name=key_name,
         public_key=public_key
     )
-    logging.info(f"Keypair '{key_name}' created.")
+    if log:
+        logging.info(f"Keypair '{key_name}' created.")
     return keypair
 
-def create_network(tag, conn):
+def create_or_get_network(tag, conn, log=True):
     """
     Create a full network setup: network + subnet + router (with gateway and interface).
     Returns (network, subnet, router)
@@ -60,9 +62,11 @@ def create_network(tag, conn):
     network = conn.network.find_network(network_name)
     if not network:
         network = conn.network.create_network(name=network_name)
-        logging.info(f"Network '{network_name}' created.")
+        if log:
+            logging.info(f"Network '{network_name}' created.")
     else:
-        logging.info(f"Network '{network_name}' already exists.")
+        if log:
+            logging.info(f"Network '{network_name}' already exists.")
 
     # SUBNET
     subnet = conn.network.find_subnet(subnet_name)
@@ -75,15 +79,18 @@ def create_network(tag, conn):
             gateway_ip=gateway_ip,
             dns_nameservers=["8.8.8.8"]
         )
-        logging.info(f"Subnet '{subnet_name}' created.")
+        if log:
+            logging.info(f"Subnet '{subnet_name}' created.")
     else:
-        logging.info(f"Subnet '{subnet_name}' already exists.")
+        if log:
+            logging.info(f"Subnet '{subnet_name}' already exists.")
 
     # ROUTER
     router = conn.network.find_router(router_name)
     if not router:
         router = conn.network.create_router(name=router_name)
-        logging.info(f"Router '{router_name}' created.")
+        if log:
+            logging.info(f"Router '{router_name}' created.")
 
         # Connect to external network if available
         ext_net = conn.network.find_network(EXTERNAL_NETWORK_NAME)
@@ -96,13 +103,15 @@ def create_network(tag, conn):
 
         # Add router interface to subnet
         conn.network.add_interface_to_router(router, subnet_id=subnet.id)
-        logging.info(f"Router '{router_name}' interface added to subnet '{subnet_name}'.")
+        if log:
+            logging.info(f"Router '{router_name}' interface added to subnet '{subnet_name}'.")
     else:
-        logging.info(f"Router '{router_name}' already exists.")
+        if log:
+            logging.info(f"Router '{router_name}' already exists.")
 
     return network, subnet, router
 
-def create_server_return(conn, name, tag, network, key_name, security_groups, user_data=None):
+def create_or_get_server(conn, name, tag, network, key_name, security_groups, user_data=None):
     """
     Create a virtual server in OpenStack.
     """
@@ -132,7 +141,7 @@ def create_server_return(conn, name, tag, network, key_name, security_groups, us
     return server
 
 
-def assign_floating_ip_to_port(conn, server):
+def assign_or_get_floating_ip(conn, server):
     """
     Assigns a floating IP to the bastion server. If no available floating IPs exist, creates one.
     Also ensures the floating IP is associated with the server's port.
