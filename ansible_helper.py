@@ -14,7 +14,7 @@ def ansible_ping(inventory_path, config_path, hosts = "all"):
     cmd = ["ansible", hosts,"--ssh-common-args", f"-F {config_path}", "-i", inventory_path, "-m", "ping"]
     return subprocess.run(cmd, capture_output=True, text=True, env=env)
 
-def check_reachability(inventory_path, config_path):
+def check_reachability(inventory_path, config_path, check_reachable = 0, count = 2):
     count = 0
     while True:
        
@@ -30,7 +30,7 @@ def check_reachability(inventory_path, config_path):
                 unreachable += 1
                 
         logging.info("Reachable hosts: %d, Unreachable hosts: %d", reachable, unreachable)
-        if count > 2 and reachable == 0:
+        if count > 2 and reachable == check_reachable:
             logging.info("No reachable hosts found. Exiting.")
             return False
             exit(1)
@@ -38,6 +38,10 @@ def check_reachability(inventory_path, config_path):
             logging.info("All hosts are reachable.")
             return True
             exit(0)
+        if count > 10:
+            logging.info("Too many retries. Exiting.")
+            return False
+            exit(1)
         logging.info("Retrying in 5 seconds...")
         count +=1
         time.sleep(5)
@@ -53,6 +57,7 @@ def check_hosts_status(inventory_path, config_path):
     result = ansible_ping(inventory_path, config_path, hosts="webservers")
     unreachable_hosts = []
     reachable_hosts = []
+    
     for line in result.stdout.splitlines():
         # Match UNREACHABLE lines
         match_unreachable = re.search(r"(.*?) \| UNREACHABLE", line)

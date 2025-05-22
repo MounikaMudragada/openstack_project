@@ -4,18 +4,22 @@ import time
 import argparse
 import openstack
 import logging
+import base64
+import sys
+
 from infrastructure import (
     load_openrc,
     create_or_get_keypair,
     create_or_get_network,
     create_or_get_server, 
     assign_or_get_floating_ip,
-    abs_path
+    abs_path, 
+    give_server_name_to_create
 )
 from security_groups import (
     create_or_get_webservers_security_group,
 )
-from ansible_runner import (
+from ansible_helper import (
     check_reachability,
     run_ansible_playbook,
     check_hosts_status
@@ -24,6 +28,9 @@ from config_hosts_generator import (
     write_ansible_and_ssh_config,
     extract_names_ips_from_server
     )
+from variables import ( 
+    WEBSERVER_USER_DATA,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,7 +78,83 @@ def main(openrc_path, tag, public_key_path):
                     playbook_path=abs_path("./site.yaml"), 
                     tags=["haproxy", "gather_facts"]
                 )
-        time.sleep(30 - (time.time()- present_time))
+        
+        elif len(reachable_hosts) < no_of_servers_required:
+            logging.info("We have only %d but we need %d of servers.", len(reachable_hosts), no_of_servers_required)
+            server_names_to_create = give_server_name_to_create(
+                no_of_servers_required,
+                reachable_hosts, 
+                tag
+            )
+            for name in server_names_to_create:
+                user_data = base64.b64encode(WEBSERVER_USER_DATA.encode()).decode()
+                logging.info("Creating server: %s", name)
+                server = create_or_get_server(conn, name, 
+                                    tag, 
+                                    network, 
+                                    keypair, 
+                                    web_sg, 
+                                    user_data=user_data)
+            
+            total_servers = list(conn.compute.servers())
+            server_names_ip_dict = extract_names_ips_from_server(total_servers, tag)
+            write_ansible_and_ssh_config(
+                server_names_ip_dict,
+                tag,
+                abs_path(public_key_path)[:-4]
+            )
+            logging.info("Check if all servers are reachable.")
+            if check_reachability(
+                inventory_path=abs_path("./hosts"),
+                config_path=abs_path(f"./{tag}_config"),
+                check_reachable=len(reachable_hosts)+1,
+                count=4
+            ):
+                logging.info("All servers are reachable.")
+            else:   
+                logging.error("Some servers are unreachable. Please check the network configuration.")
+                sys.exit(1)
+            logging.info("Updating the webservers and haproxy configuration.")
+            run_ansible_playbook(
+                inventory_path=abs_path("./hosts"),
+                config_path=abs_path(f"./{tag}_config"),
+                playbook_path=abs_path("./site.yaml"),
+            )
+        elif len(reachable_hosts) > no_of_servers_required:
+            logging.info(
+                "We have more than required number of servers i.e %d but we have %d.", no_of_servers_required, len(reachable_hosts)
+            )   
+            sorted_reachable_hosts = sorted(reachable_hosts)
+            for server_name in sorted_reachable_hosts[no_of_servers_required:]:
+                logging.info("Deleting server: %s", server_name)
+                server = conn.compute.find_server(server_name)
+                if server:
+                    conn.compute.delete_server(server)
+                    conn.compute.wait_for_delete(server)
+                    logging.info("Server %s deleted.", server_name)
+                else:
+                    logging.warning("Server %s not found.", server_name)
+            logging.info("We have deleted the servers which are not required.")
+            logging.info("Updating the hosts file and config file.")
+            
+            total_servers = list(conn.compute.servers())
+            server_names_ip_dict = extract_names_ips_from_server(total_servers, tag)
+            write_ansible_and_ssh_config(
+                server_names_ip_dict,
+                tag,
+                abs_path(public_key_path)[:-4]
+            )
+            logging.info("Updating the haproxy configuration.")
+            run_ansible_playbook(
+                inventory_path=abs_path("./hosts"),
+                config_path=abs_path(f"./{tag}_config"),
+                playbook_path=abs_path("./site.yaml"), 
+                tags=["haproxy", "gather_facts"]
+            )
+            
+        if time.time() - present_time < 30:
+            logging.info("Sleeping for %d seconds.", 30 - (time.time()- present_time))
+            time.sleep(30 - (time.time()- present_time))
         
         
 if __name__ == "__main__":

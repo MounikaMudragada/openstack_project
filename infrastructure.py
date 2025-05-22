@@ -180,6 +180,22 @@ def abs_path(relative_path):
     """
     return os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path))
 
+def give_server_name_to_create(number_of_servers, reachable_hosts, tag):
+    """
+    Generate server names based on the number of servers and reachable hosts.
+    """
+    server_names = []
+    created_servers = 0
+    required_servers = number_of_servers - len(reachable_hosts)
+    for i in range(number_of_servers):
+        server_name = f"{tag}_dev{i+1}"
+        if server_name not in reachable_hosts:
+            server_names.append(server_name)
+            created_servers += 1
+            if created_servers == required_servers:
+                break
+    return server_names
+
 if __name__ == "__main__":
     # Example usage
     openrc_path = abs_path("./openrc.sh")
