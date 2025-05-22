@@ -131,28 +131,6 @@ def create_server_return(conn, name, tag, network, key_name, security_groups, us
     logging.info(f"Server '{name}' created.")
     return server
 
-def cleanup_floating_ips(conn, keep=2):
-    """
-    Delete excess unattached floating IPs, keeping only the most recent `keep` number.
-    """
-    all_fips = list(conn.network.ips())
-    # A floating IP is unattached if port_id is None
-    unattached_fips = [fip for fip in all_fips if fip.port_id is None]
-
-    if len(unattached_fips) <= keep:
-        logging.info(f"Only {len(unattached_fips)} unattached floating IPs found. No deletion needed.")
-        return
-    
-    # Keep the most recent `keep`, delete the rest
-    to_delete = unattached_fips[keep:]
-
-    for fip in to_delete:
-        try:
-            conn.network.delete_ip(fip)
-            logging.info(f"Deleted floating IP {fip.floating_ip_address}.")
-        except Exception as e:
-            logging.error(f"Error deleting floating IP {fip.floating_ip_address}: {e}")
-
 
 def assign_floating_ip_to_port(conn, server):
     """

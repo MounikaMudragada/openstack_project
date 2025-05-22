@@ -12,11 +12,10 @@ from infrastructure import (
     create_keypair,
     create_network,
     create_server_return, 
-    cleanup_floating_ips,
     assign_floating_ip_to_port,
     abs_path
 )
-from datetime import datetime, timedelta
+from remove_infra import cleanup_excess_floating_ips
 from security_groups import (
     create_bastion_security_group,
     create_haproxy_security_group,
@@ -58,7 +57,7 @@ def main(openrc_path, tag, public_key_path):
     web_sg = create_webservers_security_group(tag, conn)
     
     logging.info("Deleting excess unattached floating IPs if it exceeds 2.")
-    cleanup_floating_ips(conn, keep=2) 
+    cleanup_excess_floating_ips(conn, keep=2) 
     
     server_names_ips = {}
     names = [f"{tag}_bastion", f"{tag}_haproxy"]
