@@ -9,12 +9,16 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+def ansible_ping(inventory_path, config_path, hosts = "all"):
+    env = os.environ.copy()
+    cmd = ["ansible", hosts,"--ssh-common-args", f"-F {config_path}", "-i", inventory_path, "-m", "ping"]
+    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+
 def check_reachability(inventory_path, config_path):
     count = 0
     while True:
-        env = os.environ.copy()
-        cmd = ["ansible", "all","--ssh-common-args", f"-F {config_path}", "-i", inventory_path, "-m", "ping"]
-        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+       
+        result = ansible_ping(inventory_path, config_path)
         # print(result)
         reachable = 0
         unreachable = 0
@@ -39,7 +43,26 @@ def check_reachability(inventory_path, config_path):
         time.sleep(5)
 
 
-def run_ansible_playbook(inventory_path, config_path, playbook_path):
+def run_ansible_playbook(inventory_path, config_path, playbook_path, tags = []):
     cmd = ["ansible-playbook", "-i", inventory_path, "--ssh-common-args", f"-F {config_path}", playbook_path]
+    if len(tags) > 0:
+        cmd += ["--tags", ",".join(tags)]
     subprocess.run(cmd)
     
+def check_hosts_status(inventory_path, config_path):
+    result = ansible_ping(inventory_path, config_path, hosts="webservers")
+    unreachable_hosts = []
+    reachable_hosts = []
+    for line in result.stdout.splitlines():
+        # Match UNREACHABLE lines
+        match_unreachable = re.search(r"(.*?) \| UNREACHABLE", line)
+        if match_unreachable:
+            host = match_unreachable.group(1).strip()
+            unreachable_hosts.append(host)
+
+        # Match SUCCESS lines
+        match_success = re.search(r"(.*?) \| SUCCESS", line)
+        if match_success:
+            host = match_success.group(1).strip()
+            reachable_hosts.append(host)
+    return unreachable_hosts, reachable_hosts

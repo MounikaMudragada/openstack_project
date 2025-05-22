@@ -3,6 +3,7 @@
   hosts: webservers
   gather_facts: false
   become: true
+  tags: webservers
   tasks:
     - name: Copy snmpd.conf
       copy:
@@ -37,14 +38,16 @@
         enabled: true
 
 - name: Gather facts on all hosts
-  hosts: all
+  hosts: webservers
   gather_facts: true
+  tags: gather_facts
   tasks: []
 
 - name: Configure HAProxy and Nginx
   hosts: haproxy
   gather_facts: false
   become: true
+  tags: haproxy
   tasks:
     - name: Configure HAProxy
       template:
