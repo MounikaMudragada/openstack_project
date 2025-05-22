@@ -2,6 +2,7 @@ import subprocess
 import os
 import logging
 
+
 from variables import (
     IMAGE_ID,
     FLAVOR_ID,     
@@ -101,7 +102,7 @@ def create_network(tag, conn):
 
     return network, subnet, router
 
-def create_server_return(conn, name, tag, network, key_name, security_groups, user_data_path=None):
+def create_server_return(conn, name, tag, network, key_name, security_groups, user_data=None):
     """
     Create a virtual server in OpenStack.
     """
@@ -111,12 +112,8 @@ def create_server_return(conn, name, tag, network, key_name, security_groups, us
         logging.info(f"Server '{name}' already exists.")
         return server
 
-    # Read user_data if provided
-    user_data = ""
-    if user_data_path and os.path.isfile(user_data_path):
-        with open(user_data_path, 'r') as f:
-            user_data = f.read()
-            
+    if not user_data:
+        user_data = ""
     sec_groups = [{"name": security_groups.name}]
     # Create the server
     server = conn.compute.create_server(
@@ -177,7 +174,7 @@ def assign_floating_ip_to_port(conn, server):
     for fip in conn.network.ips():
         if not fip.port_id:
             floating_ip = fip
-            logging.info(f"Reusing existing floating IP {floating_ip.floating_ip_address} for port {port.id}.")
+            logging.info(f"Reusing existing floating IP {floating_ip.floating_ip_address} port of {server.name}.")
             break
 
     if not floating_ip:
@@ -188,3 +185,18 @@ def assign_floating_ip_to_port(conn, server):
     logging.info(f"Assigned floating IP {update_ip.floating_ip_address} to port of {server.name}.")
 
     return floating_ip.floating_ip_address
+
+
+def abs_path(relative_path):
+    """
+    Return the absolute path of a file or directory.
+    """
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), relative_path))
+
+if __name__ == "__main__":
+    # Example usage
+    openrc_path = abs_path("./openrc.sh")
+    print(f"Loading OpenStack RC file from: {openrc_path}")
+    # Assuming `conn` is an established OpenStack connection
+    # conn = establish_connection()  # Replace with actual connection code
+    # create_network("example_tag", conn)
