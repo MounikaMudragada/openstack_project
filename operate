@@ -7,6 +7,7 @@ import logging
 import base64
 import sys
 
+from haproxy_curl import check_reachability_via_haproxy
 from infrastructure import (
     load_openrc,
     create_or_get_keypair,
@@ -14,7 +15,8 @@ from infrastructure import (
     create_or_get_server, 
     assign_or_get_floating_ip,
     abs_path, 
-    give_server_name_to_create
+    give_server_name_to_create, 
+    get_floating_ip_for_server
 )
 from security_groups import (
     create_or_get_webservers_security_group,
@@ -50,15 +52,18 @@ def main(openrc_path, tag, public_key_path):
     keypair = create_or_get_keypair(tag, public_key_path, conn, log=False)
     network, subnet, router = create_or_get_network(tag, conn, log=False)
     web_sg = create_or_get_webservers_security_group(tag, conn, log=False)
+    logging.info("Get the floating IP for the haproxy server.")
+    floating_ip = get_floating_ip_for_server(conn, f"{tag}_haproxy")
     
     while True:
         present_time = time.time()
         logging.info("Read the servers.conf file to get the number of servers required.")
         no_of_servers_required = int(open("./servers.conf").read().strip())
-        logging.info("checking the reachability of the servers using ansible ping.")
-        unreachable_hosts, reachable_hosts = check_hosts_status(
-            inventory_path=abs_path("./hosts"),
-            config_path=abs_path(f"./{tag}_config"),
+        logging.info("checking the reachability of the servers using curl haproxy.")
+        reachable_hosts, unreachable_hosts = check_reachability_via_haproxy(
+            floating_ip[0],
+            5000, 
+            abs_path("./hosts")
         )
         if len(reachable_hosts) == no_of_servers_required:
             logging.info("We have required number of servers i.e %d", no_of_servers_required)

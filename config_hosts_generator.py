@@ -1,4 +1,11 @@
 import re
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def write_ansible_and_ssh_config(hosts_dict, tag, identity_file_path):
     bastion_key = f"{tag}_bastion"
@@ -57,7 +64,7 @@ Host {haproxy_key}
     with open(f"{tag}_config", "w") as f:
         f.write(config_file_content)
 
-    print(f"Files written: 'hosts' and '{tag}_config'")
+    logging.info(f"Files written: 'hosts' and '{tag}_config'")
 
 
 def extract_names_ips_from_server(total_servers, tag):

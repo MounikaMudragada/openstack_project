@@ -196,6 +196,33 @@ def give_server_name_to_create(number_of_servers, reachable_hosts, tag):
                 break
     return server_names
 
+def get_floating_ip_for_server(conn, server_name):
+    """
+    Get the floating IP(s) associated with the given server name.
+
+    Args:
+        conn (openstack.connection.Connection): Authenticated OpenStack connection.
+        server_name (str): Name of the server (e.g., "{tag}_haproxy").
+
+    Returns:
+        list of floating IP strings or empty list if none found.
+    """
+    
+    # Find the server by name
+    server = conn.compute.find_server(server_name)
+
+    floating_ips = []
+    # Get ports attached to the server
+    ports = list(conn.network.ports(device_id=server.id))
+    for port in ports:
+        # For each port, check if there's a floating IP associated
+        fips = list(conn.network.ips(port_id=port.id))
+        for fip in fips:
+            if fip.floating_ip_address:
+                floating_ips.append(fip.floating_ip_address)
+
+    return floating_ips
+
 if __name__ == "__main__":
     # Example usage
     openrc_path = abs_path("./openrc.sh")

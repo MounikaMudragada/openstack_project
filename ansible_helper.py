@@ -10,9 +10,13 @@ logging.basicConfig(
 )
 
 def ansible_ping(inventory_path, config_path, hosts = "all"):
-    env = os.environ.copy()
     cmd = ["ansible", hosts,"--ssh-common-args", f"-F {config_path}", "-i", inventory_path, "-m", "ping"]
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False
+    )
 
 def check_reachability(inventory_path, config_path, check_reachable = 0, count = 2):
     count = 0
