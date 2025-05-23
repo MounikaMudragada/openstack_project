@@ -4,8 +4,8 @@ import logging
 
 
 from variables import (
-    IMAGE_ID,
-    FLAVOR_ID,     
+    IMAGE_NAME,
+    FLAVOR_NAME,     
     EXTERNAL_NETWORK_NAME,  
 )
 logging.basicConfig(
@@ -125,10 +125,17 @@ def create_or_get_server(conn, name, tag, network, key_name, security_groups, us
         user_data = ""
     sec_groups = [{"name": security_groups.name}]
     # Create the server
+    image = conn.compute.find_image(name_or_id=IMAGE_NAME)
+    flavor = conn.compute.find_flavor(name_or_id=FLAVOR_NAME)
+    if not image or not flavor:
+        raise ValueError(
+            f"{'Image ' + IMAGE_NAME + ' not found. '}"
+            f"{'Flavor ' + FLAVOR_NAME + ' not found. '}"
+        )
     server = conn.compute.create_server(
         name=name,
-        image_id=IMAGE_ID,
-        flavor_id=FLAVOR_ID,
+        image_id=image.id,
+        flavor_id=flavor.id,
         networks=[{"uuid": network.id}],
         key_name=key_name.id,
         security_groups=sec_groups,

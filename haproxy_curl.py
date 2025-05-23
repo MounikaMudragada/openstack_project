@@ -56,7 +56,7 @@ if __name__ == "__main__":
     # Example usage
     # Replace with your actual HAProxy IP, port, and inventory file path
     reachable_hosts, unreachable_hosts = check_reachability_via_haproxy(
-                "188.240.223.134",
+                "8.8.8.8",
                 5000, 
                 "./hosts")
     print("Reachable hosts:", reachable_hosts, "Unreachable hosts:", unreachable_hosts)
