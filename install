@@ -81,7 +81,7 @@ def main(openrc_path, tag, public_key_path):
         if name == f"{tag}_bastion":
             server_names_ips[server.name] = floating_ip
         else:
-            server_names_ips[server.name] = server.addresses['shivanetwork'][0]['addr']
+            server_names_ips[server.name] = server.addresses[network.name][0]['addr']
     
     num_servers = int(open("./servers.conf").read().strip())
     logging.info(f"Creating {num_servers} web servers.")
@@ -95,7 +95,7 @@ def main(openrc_path, tag, public_key_path):
                                     keypair, 
                                     web_sg, 
                                     user_data=user_data)
-        server_names_ips[server.name] = server.addresses['shivanetwork'][0]['addr']
+        server_names_ips[server.name] = server.addresses[network.name][0]['addr']
     
     write_ansible_and_ssh_config(server_names_ips, tag, abs_path(public_key_path)[:-4] )
     

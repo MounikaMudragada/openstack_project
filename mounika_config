@@ -1,0 +1,35 @@
+Host *
+    Port 22
+    User ubuntu
+    IdentityFile /home/sushma/.ssh/id_rsa
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    PasswordAuthentication no
+    ForwardAgent yes
+
+Host mounika_bastion
+    HostName 188.95.227.204
+
+Host mounika_dev5
+    HostName 192.168.0.40
+    ProxyJump mounika_bastion
+
+Host mounika_dev4
+    HostName 192.168.0.192
+    ProxyJump mounika_bastion
+
+Host mounika_dev3
+    HostName 192.168.0.234
+    ProxyJump mounika_bastion
+
+Host mounika_dev2
+    HostName 192.168.0.206
+    ProxyJump mounika_bastion
+
+Host mounika_dev1
+    HostName 192.168.0.197
+    ProxyJump mounika_bastion
+
+Host mounika_haproxy
+    HostName 192.168.0.239
+    ProxyJump mounika_bastion

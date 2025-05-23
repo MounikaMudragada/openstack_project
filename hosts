@@ -1,0 +1,15 @@
+[Bastion]
+mounika_bastion
+
+[haproxy]
+mounika_haproxy
+
+[webservers]
+mounika_dev5
+mounika_dev4
+mounika_dev3
+mounika_dev2
+mounika_dev1
+
+[all:vars]
+ansible_user=ubuntu
